@@ -1,0 +1,5 @@
+<resources>
+    <!-- 颜色按钮尺寸 -->
+    <dimen name="color_button_size">32dp</dimen>
+    <dimen name="color_button_margin">4dp</dimen>
+</resources>

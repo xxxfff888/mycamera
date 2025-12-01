@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 颜色预览 -->
+    <View
+        android:id="@+id/colorResult"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:background="@android:color/white" />
+
+    <!-- 红色通道 -->
+    <TextView
+        android:id="@+id/tvRed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="R: 255"
+        android:textColor="#000000" />
+
+    <SeekBar
+        android:id="@+id/seekRed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255"
+        android:progress="255" />
+
+    <!-- 绿色通道 -->
+    <TextView
+        android:id="@+id/tvGreen"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="G: 255"
+        android:textColor="#000000" />
+
+    <SeekBar
+        android:id="@+id/seekGreen"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255"
+        android:progress="255" />
+
+    <!-- 蓝色通道 -->
+    <TextView
+        android:id="@+id/tvBlue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="B: 255"
+        android:textColor="#000000" />
+
+    <SeekBar
+        android:id="@+id/seekBlue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="255"
+        android:progress="255" />
+
+    <!-- 按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnCancel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:text="取消" />
+
+        <Button
+            android:id="@+id/btnOk"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="确定" />
+    </LinearLayout>
+
+</LinearLayout>

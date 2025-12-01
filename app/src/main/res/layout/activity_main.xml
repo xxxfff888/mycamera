@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.MainActivity">
+
+    <!-- 顶部标题栏 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/topAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:title="图片编辑器"
+        android:theme="@style/ThemeOverlay.Material3.Dark.ActionBar" />
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize">
+
+        <!-- 顶部三个主操作按钮 -->
+        <LinearLayout
+            android:id="@+id/topActionBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:gravity="center"
+            android:background="#333333">
+
+            <Button
+                android:id="@+id/btnOpenAlbum"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="相册选图" />
+
+            <Button
+                android:id="@+id/btnOpenCamera"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="相机拍照" />
+
+            <Button
+                android:id="@+id/btnSaveImage"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="保存图片" />
+        </LinearLayout>
+
+        <!-- 夜间模式开关 -->
+        <CheckBox
+            android:id="@+id/cbNightMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginEnd="12dp"
+            android:text="夜间模式"
+            android:textColor="#FFFFFF"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+
+        <!-- 图片编辑区域 -->
+        <FrameLayout
+            android:id="@+id/editorContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#000000">
+
+            <!-- 可缩放查看的图片 -->
+            <com.github.chrisbanes.photoview.PhotoView
+                android:id="@+id/photoView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="fitCenter" />
+
+            <!-- 文字 + 贴纸 叠加层 -->
+            <FrameLayout
+                android:id="@+id/textOverlayContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clickable="false"
+                android:focusable="false" />
+
+            <!-- 自由裁剪覆盖层（拖动裁剪框），默认隐藏 -->
+            <com.example.mycamera.CropOverlayView
+                android:id="@+id/cropOverlayView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <!-- 裁剪 / 旋转 / 文字 / 滤镜 / 贴纸 按钮区 -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#222222"
+            android:padding="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- 裁剪弹窗 -->
+                <Button
+                    android:id="@+id/btnCropMenu"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="裁剪" />
+
+                <!-- 旋转/翻转弹窗 -->
+                <Button
+                    android:id="@+id/btnRotateMenu"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="旋转/翻转" />
+
+                <Button
+                    android:id="@+id/btnAddText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="添加文字" />
+
+                <Button
+                    android:id="@+id/btnFilter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="滤镜" />
+
+                <Button
+                    android:id="@+id/btnSticker"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="贴纸" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- 自由裁剪模式下的操作栏 -->
+        <LinearLayout
+            android:id="@+id/cropControlLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="#444444"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btnCropConfirm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="应用裁剪" />
+
+            <Button
+                android:id="@+id/btnCropCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:text="取消" />
+        </LinearLayout>
+
+        <!-- 亮度 / 对比度 调节栏 -->
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:background="#333333">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="亮度 (-100 ~ 100)"
+                android:textColor="#FFFFFF" />
+
+            <SeekBar
+                android:id="@+id/seekBrightness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="200"
+                android:progress="100" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="对比度 (0.5 ~ 1.5)"
+                android:textColor="#FFFFFF" />
+
+            <SeekBar
+                android:id="@+id/seekContrast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="50" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
