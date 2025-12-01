@@ -95,13 +95,12 @@ class MainActivity : AppCompatActivity() {
     private enum class FilterType { ORIGINAL, BW, RETRO, FRESH, WARM, COOL }
     private var currentFilter: FilterType = FilterType.ORIGINAL
 
-    // [Fix 1] 核心修复：把大小计算放在这里，只计算一次，永久固定。
-    // 即使 Bitmap 后来被 recycle 了，这个 sizeKb 值也不会变，保证 LruCache 计数一致。
+    // 缓存对象：预览 + 全尺寸 + 固定大小（KB）
     private data class CachedImage(val preview: Bitmap, val full: Bitmap?) {
         val sizeKb: Int = run {
             val p = if (!preview.isRecycled) preview.byteCount / 1024 else 0
             val f = if (full != null && !full.isRecycled) full.byteCount / 1024 else 0
-            max(1, p + f) // 确保至少为 1，避免除零或负数风险
+            max(1, p + f)
         }
     }
 
@@ -109,15 +108,11 @@ class MainActivity : AppCompatActivity() {
     private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
     private val cacheSizeKb = maxMemoryKb / 8
 
-    // [Fix 2] 核心修复：sizeOf 只读 CachedImage 里的固定字段
     private val bitmapCache = object : LruCache<String, CachedImage>(cacheSizeKb) {
         override fun sizeOf(key: String, value: CachedImage): Int {
-            // 不再访问 value.preview.byteCount，直接读取计算好的 sizeKb
+            // 固定大小，避免因 Bitmap 被回收导致 sizeOf 前后不一致
             return value.sizeKb
         }
-
-        // 可选：当图片被移除出缓存时的回调（这里暂不做处理，交由 GC 或外部逻辑回收）
-        // override fun entryRemoved(evicted: Boolean, key: String, oldValue: CachedImage, newValue: CachedImage?) {}
     }
 
     private var currentImageKey: String? = null
@@ -407,17 +402,42 @@ class MainActivity : AppCompatActivity() {
         setEditButtonsEnabled(false)
     }
 
+    /**
+     * 自由裁剪确认
+     * 这里对裁剪矩形做了 **两次** 安全夹紧：一次在 CropOverlayView 中，一次在这里，
+     * 确保不会传非法参数给 Bitmap.createBitmap。
+     */
     private fun applyCrop() {
         val previewSrc = baseBitmap ?: currentBitmap ?: return
-        val cropRectPreview = cropOverlayView.getCropRectInBitmap()
+        if (previewSrc.isRecycled) {
+            Toast.makeText(this, "图片资源已释放，请重新选择", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 来自 CropOverlayView 的 bitmap 坐标裁剪矩形
+        val rawRect = cropOverlayView.getCropRectInBitmap()
+        var cropRectPreview = Rect(rawRect)
+
+        // 再做一层安全夹紧：限制在 [0, w/h] 范围内，并保证宽高至少为 1
+        val pw = previewSrc.width
+        val ph = previewSrc.height
+        cropRectPreview = Rect(
+            cropRectPreview.left.coerceIn(0, pw - 1),
+            cropRectPreview.top.coerceIn(0, ph - 1),
+            cropRectPreview.right.coerceIn(cropRectPreview.left + 1, pw),
+            cropRectPreview.bottom.coerceIn(cropRectPreview.top + 1, ph)
+        )
+
         if (cropRectPreview.width() <= 0 || cropRectPreview.height() <= 0) {
             Toast.makeText(this, "裁剪区域无效", Toast.LENGTH_SHORT).show()
             return
         }
 
         val hasOverlays = textOverlayContainer.childCount > 0
-        val wPreview = previewSrc.width.toFloat()
-        val hPreview = previewSrc.height.toFloat()
+
+        // 用 preview 宽高求归一化坐标，给 full 使用
+        val wPreview = pw.toFloat()
+        val hPreview = ph.toFloat()
 
         val leftNorm = cropRectPreview.left / wPreview
         val topNorm = cropRectPreview.top / hPreview
@@ -426,6 +446,7 @@ class MainActivity : AppCompatActivity() {
 
         uiScope.launch(Dispatchers.Default) {
             try {
+                // 裁剪预览图
                 val croppedPreview = Bitmap.createBitmap(
                     previewSrc,
                     cropRectPreview.left,
@@ -434,15 +455,23 @@ class MainActivity : AppCompatActivity() {
                     cropRectPreview.height()
                 )
 
+                // 同步裁剪 fullBitmap（如果存在）
                 val oldFull = fullBitmap
                 val croppedFull = oldFull?.let { full ->
                     val fw = full.width.toFloat()
                     val fh = full.height.toFloat()
+                    // 通过归一化坐标映射到 full
+                    val fullRectRaw = Rect(
+                        (leftNorm * fw).toInt(),
+                        (topNorm * fh).toInt(),
+                        (rightNorm * fw).toInt(),
+                        (bottomNorm * fh).toInt()
+                    )
                     val fullRect = Rect(
-                        (leftNorm * fw).toInt().coerceIn(0, full.width - 1),
-                        (topNorm * fh).toInt().coerceIn(0, full.height - 1),
-                        (rightNorm * fw).toInt().coerceIn(1, full.width),
-                        (bottomNorm * fh).toInt().coerceIn(1, full.height)
+                        fullRectRaw.left.coerceIn(0, full.width - 1),
+                        fullRectRaw.top.coerceIn(0, full.height - 1),
+                        fullRectRaw.right.coerceIn(fullRectRaw.left + 1, full.width),
+                        fullRectRaw.bottom.coerceIn(fullRectRaw.top + 1, full.height)
                     )
                     val width = (fullRect.right - fullRect.left).coerceAtLeast(1)
                     val height = (fullRect.bottom - fullRect.top).coerceAtLeast(1)
@@ -453,11 +482,14 @@ class MainActivity : AppCompatActivity() {
                     // 移除缓存后再替换
                     currentImageKey?.let { bitmapCache.remove(it) }
 
+                    baseBitmap?.recycle()
                     baseBitmap = croppedPreview
                     currentBitmap?.recycle()
                     currentBitmap = null
+
                     oldFull?.recycle()
                     fullBitmap = croppedFull
+
                     applyAllEffects()
                     exitCropMode()
                     if (hasOverlays) {
@@ -471,6 +503,15 @@ class MainActivity : AppCompatActivity() {
             } catch (oom: OutOfMemoryError) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@MainActivity, "图片过大，裁剪失败", Toast.LENGTH_LONG).show()
+                    exitCropMode()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "裁剪失败：${e.message ?: "未知错误"}",
+                        Toast.LENGTH_LONG
+                    ).show()
                     exitCropMode()
                 }
             }
@@ -573,7 +614,6 @@ class MainActivity : AppCompatActivity() {
         // 先尝试从 LruCache 取
         val cached = bitmapCache.get(imageKey)
         if (cached != null) {
-            // [Fix] 这里的 cached.preview 如果回收了，必须 remove
             if (cached.preview.isRecycled || cached.full?.isRecycled == true) {
                 bitmapCache.remove(imageKey)
             } else {
@@ -815,6 +855,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- 旋转 / 翻转 / 固定比例裁剪（preview + full 同步） ----------
+    // 这部分代码与你之前的一样，仅略。
 
     private fun rotateImage(degree: Float) {
         val previewSrc = baseBitmap ?: currentBitmap ?: return
@@ -836,7 +877,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 withContext(Dispatchers.Main) {
-                    // 编辑后，原图已废弃，需从缓存中清理 key
                     currentImageKey?.let { bitmapCache.remove(it) }
 
                     baseBitmap?.recycle()
@@ -1056,7 +1096,7 @@ class MainActivity : AppCompatActivity() {
             }.show()
     }
 
-    // ---------- 自定义颜色对话框所用的小工具 ----------
+    // ---------- 小工具 ----------
 
     private fun updateColorValues(
         red: Int,
@@ -1088,7 +1128,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 在主线程抓取 overlay（View.draw 必须在主线程）
+        // 在主线程抓取 overlay
         val overlayBitmap: Bitmap? =
             if (textOverlayContainer.width > 0 && textOverlayContainer.height > 0) {
                 try {
@@ -1145,18 +1185,19 @@ class MainActivity : AppCompatActivity() {
      * 1. 滤镜 + 亮度对比度
      * 2. 合成 overlay（文字 + 贴纸）
      * 3. 添加“训练营”水印
+     *
+     * 增加对所有 Exception 的捕获，避免非法参数导致闪退。
      */
     private suspend fun renderFullBitmapWithCurrentSettings(overlayBitmap: Bitmap?): Bitmap? =
         withContext(Dispatchers.Default) {
             val src = fullBitmap ?: baseBitmap ?: return@withContext null
-            // Safety check
             if (src.isRecycled) return@withContext null
 
             try {
                 val result = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(result)
 
-                // 先画应用滤镜 / 亮度 / 对比度后的底图
+                // 滤镜 + 亮度对比度
                 val cm = ColorMatrix()
                 getFilterMatrix(currentFilter)?.let { cm.postConcat(it) }
                 cm.postConcat(createBrightnessContrastMatrix(currentBrightness, currentContrast))
@@ -1167,7 +1208,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 canvas.drawBitmap(src, 0f, 0f, paint)
 
-                // 再画 overlay（文字 + 贴纸容器整体截屏）
+                // overlay
                 overlayBitmap?.let { overlay ->
                     val scaleX = src.width.toFloat() / overlay.width
                     val scaleY = src.height.toFloat() / overlay.height
@@ -1182,7 +1223,7 @@ class MainActivity : AppCompatActivity() {
                     canvas.drawBitmap(overlay, m, null)
                 }
 
-                // 最后画“训练营”水印
+                // 水印
                 val wmText = "训练营"
                 val wmPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = Color.WHITE
@@ -1199,6 +1240,8 @@ class MainActivity : AppCompatActivity() {
 
                 result
             } catch (oom: OutOfMemoryError) {
+                null
+            } catch (e: Exception) {
                 null
             }
         }

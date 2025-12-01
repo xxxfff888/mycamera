@@ -66,18 +66,30 @@ class CropOverlayView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * 将 View 坐标系中的裁剪框映射到 bitmap 坐标。
+     * 这里做了边界保护，保证结果在 [0, bitmapWidth/Height] 范围内，
+     * 且宽高至少为 1，避免 Bitmap.createBitmap 抛异常。
+     */
     fun getCropRectInBitmap(): Rect {
-        if (bitmapWidth == 0 || bitmapHeight == 0) return Rect()
+        if (bitmapWidth == 0 || bitmapHeight == 0 || width == 0 || height == 0) {
+            return Rect()
+        }
 
         val scaleX = bitmapWidth.toFloat() / width
         val scaleY = bitmapHeight.toFloat() / height
 
-        return Rect(
-            (cropRect.left * scaleX).toInt(),
-            (cropRect.top * scaleY).toInt(),
-            (cropRect.right * scaleX).toInt(),
-            (cropRect.bottom * scaleY).toInt()
-        )
+        val leftRaw = (cropRect.left * scaleX).toInt()
+        val topRaw = (cropRect.top * scaleY).toInt()
+        val rightRaw = (cropRect.right * scaleX).toInt()
+        val bottomRaw = (cropRect.bottom * scaleY).toInt()
+
+        val left = leftRaw.coerceIn(0, bitmapWidth - 1)
+        val top = topRaw.coerceIn(0, bitmapHeight - 1)
+        val right = rightRaw.coerceIn(left + 1, bitmapWidth)
+        val bottom = bottomRaw.coerceIn(top + 1, bitmapHeight)
+
+        return Rect(left, top, right, bottom)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -137,11 +149,14 @@ class CropOverlayView @JvmOverloads constructor(
                         }
                         HANDLE_LEFT_BOTTOM -> {
                             cropRect.left = (cropRect.left + dx).coerceAtLeast(0f)
-                            cropRect.bottom = (cropRect.bottom + dy).coerceAtMost(height.toFloat())
+                            cropRect.bottom =
+                                (cropRect.bottom + dy).coerceAtMost(height.toFloat())
                         }
                         HANDLE_RIGHT_BOTTOM -> {
-                            cropRect.right = (cropRect.right + dx).coerceAtMost(width.toFloat())
-                            cropRect.bottom = (cropRect.bottom + dy).coerceAtMost(height.toFloat())
+                            cropRect.right =
+                                (cropRect.right + dx).coerceAtMost(width.toFloat())
+                            cropRect.bottom =
+                                (cropRect.bottom + dy).coerceAtMost(height.toFloat())
                         }
                         HANDLE_CENTER -> {
                             val newLeft = cropRect.left + dx
@@ -149,7 +164,9 @@ class CropOverlayView @JvmOverloads constructor(
                             val newRight = cropRect.right + dx
                             val newBottom = cropRect.bottom + dy
 
-                            if (newLeft >= 0 && newRight <= width && newTop >= 0 && newBottom <= height) {
+                            if (newLeft >= 0 && newRight <= width &&
+                                newTop >= 0 && newBottom <= height
+                            ) {
                                 cropRect.set(newLeft, newTop, newRight, newBottom)
                             }
                         }
@@ -158,14 +175,18 @@ class CropOverlayView @JvmOverloads constructor(
                     // 确保最小尺寸
                     if (cropRect.width() < MIN_CROP_SIZE) {
                         when (dragHandle) {
-                            HANDLE_LEFT_TOP, HANDLE_LEFT_BOTTOM -> cropRect.left = cropRect.right - MIN_CROP_SIZE
-                            HANDLE_RIGHT_TOP, HANDLE_RIGHT_BOTTOM -> cropRect.right = cropRect.left + MIN_CROP_SIZE
+                            HANDLE_LEFT_TOP, HANDLE_LEFT_BOTTOM ->
+                                cropRect.left = cropRect.right - MIN_CROP_SIZE
+                            HANDLE_RIGHT_TOP, HANDLE_RIGHT_BOTTOM ->
+                                cropRect.right = cropRect.left + MIN_CROP_SIZE
                         }
                     }
                     if (cropRect.height() < MIN_CROP_SIZE) {
                         when (dragHandle) {
-                            HANDLE_LEFT_TOP, HANDLE_RIGHT_TOP -> cropRect.top = cropRect.bottom - MIN_CROP_SIZE
-                            HANDLE_LEFT_BOTTOM, HANDLE_RIGHT_BOTTOM -> cropRect.bottom = cropRect.top + MIN_CROP_SIZE
+                            HANDLE_LEFT_TOP, HANDLE_RIGHT_TOP ->
+                                cropRect.top = cropRect.bottom - MIN_CROP_SIZE
+                            HANDLE_LEFT_BOTTOM, HANDLE_RIGHT_BOTTOM ->
+                                cropRect.bottom = cropRect.top + MIN_CROP_SIZE
                         }
                     }
 
@@ -176,7 +197,7 @@ class CropOverlayView @JvmOverloads constructor(
                 return true
             }
 
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
                 dragHandle = NO_HANDLE
                 return true
@@ -209,6 +230,7 @@ class CropOverlayView @JvmOverloads constructor(
     }
 
     private fun isPointInHandle(x: Float, y: Float, handleX: Float, handleY: Float): Boolean {
-        return Math.abs(x - handleX) <= HANDLE_SIZE && Math.abs(y - handleY) <= HANDLE_SIZE
+        return kotlin.math.abs(x - handleX) <= HANDLE_SIZE &&
+                kotlin.math.abs(y - handleY) <= HANDLE_SIZE
     }
 }
